@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XAI-Lyricist FastAPI Tester</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdfa;
+      --ink: #1b1f24;
+      --muted: #5f6b76;
+      --line: #d9d3c8;
+      --accent: #1f7a8c;
+      --accent-2: #bfdbf7;
+      --danger: #b42318;
+      --ok: #1f7a1f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1100px 650px at 10% -20%, #e6f2ff 0%, transparent 55%),
+        radial-gradient(900px 500px at 90% 0%, #f9ece0 0%, transparent 50%),
+        var(--bg);
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 28px auto;
+      padding: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(27, 31, 36, 0.06);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.35rem;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    input, textarea, select, button {
+      font: inherit;
+    }
+
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .mode-box {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: linear-gradient(180deg, #ffffff 0%, #fffdf8 100%);
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      background: #fff;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: linear-gradient(180deg, var(--accent-2), #d3edf5);
+    }
+
+    .status {
+      margin-top: 8px;
+      min-height: 20px;
+      font-size: 0.92rem;
+    }
+
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+
+    pre {
+      margin: 12px 0 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #0f1720;
+      color: #d1e3f5;
+      overflow: auto;
+      max-height: 360px;
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+
+    .hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>XAI-Lyricist FastAPI Tester</h1>
+      <p>Standalone test page for future FastAPI endpoints. Current JavaScript is intentionally simple and easy to adapt.</p>
+
+      <div class="row">
+        <div class="field">
+          <label for="baseUrl">API Base URL</label>
+          <input id="baseUrl" type="text" value="http://127.0.0.1:8000">
+        </div>
+        <div class="field">
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="melody">Melody (MIDI -> lyrics)</option>
+            <option value="parody">Parody (lyrics -> lyrics)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="melodyBox" class="mode-box">
+        <div class="row">
+          <div class="field">
+            <label for="melodyEndpoint">Melody Endpoint</label>
+            <input id="melodyEndpoint" type="text" value="/generate/melody">
+          </div>
+          <div class="field">
+            <label for="melodyTitle">Title</label>
+            <input id="melodyTitle" type="text" value="imagine">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="midiFile">MIDI File</label>
+            <input id="midiFile" type="file" accept=".mid,.midi">
+          </div>
+          <div class="field">
+            <label for="melodyKeywords">Keywords (comma-separated)</label>
+            <input id="melodyKeywords" type="text" value="imagine,heaven,easy,people,world">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="melodyTemperature">Temperature</label>
+            <input id="melodyTemperature" type="number" step="0.1" value="1.2">
+          </div>
+          <div class="field">
+            <label for="melodyTopk">Top-k</label>
+            <input id="melodyTopk" type="number" step="1" value="3">
+          </div>
+        </div>
+        <div class="hint">Expected request format: multipart/form-data with keys like <code>midi_file</code>, <code>title</code>, <code>keywords</code>.</div>
+      </div>
+
+      <div id="parodyBox" class="mode-box" style="display:none;">
+        <div class="row">
+          <div class="field">
+            <label for="parodyEndpoint">Parody Endpoint</label>
+            <input id="parodyEndpoint" type="text" value="/generate/parody">
+          </div>
+          <div class="field">
+            <label for="parodyTitle">Title</label>
+            <input id="parodyTitle" type="text" value="custom">
+          </div>
+        </div>
+        <div class="field">
+          <label for="parodyLyrics">Input Lyrics (one line per row)</label>
+          <textarea id="parodyLyrics">We are never ever getting back together
+You go talk to your friends talk to my friends talk to me</textarea>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="parodyKeywords">Keywords (comma-separated, optional)</label>
+            <input id="parodyKeywords" type="text" value="breakup,friends">
+          </div>
+          <div class="field">
+            <label for="parodyTemperature">Temperature</label>
+            <input id="parodyTemperature" type="number" step="0.1" value="1.3">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="parodyTopk">Top-k</label>
+            <input id="parodyTopk" type="number" step="1" value="3">
+          </div>
+          <div class="field">
+            <label for="parodyMaxTokens">Max tokens</label>
+            <input id="parodyMaxTokens" type="number" step="1" value="256">
+          </div>
+        </div>
+        <div class="hint">Expected request format: JSON with keys like <code>lyrics_lines</code>, <code>title</code>, <code>keywords</code>.</div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="sendBtn">Send Request</button>
+        <button id="curlBtn">Show cURL (preview)</button>
+        <button id="clearBtn">Clear Output</button>
+      </div>
+
+      <div id="status" class="status"></div>
+      <pre id="output">{ "info": "No request sent yet." }</pre>
+    </div>
+  </div>
+
+  <script>
+    const modeEl = document.getElementById("mode");
+    const melodyBox = document.getElementById("melodyBox");
+    const parodyBox = document.getElementById("parodyBox");
+    const sendBtn = document.getElementById("sendBtn");
+    const curlBtn = document.getElementById("curlBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusEl = document.getElementById("status");
+    const outputEl = document.getElementById("output");
+
+    function setStatus(message, isError) {
+      statusEl.textContent = message || "";
+      statusEl.className = "status " + (message ? (isError ? "err" : "ok") : "");
+    }
+
+    function parseCSV(value) {
+      return value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    function pretty(obj) {
+      return JSON.stringify(obj, null, 2);
+    }
+
+    function getBaseUrl() {
+      return document.getElementById("baseUrl").value.trim().replace(/\/$/, "");
+    }
+
+    function updateModeUI() {
+      const mode = modeEl.value;
+      melodyBox.style.display = mode === "melody" ? "" : "none";
+      parodyBox.style.display = mode === "parody" ? "" : "none";
+      setStatus("", false);
+    }
+
+    function buildMelodyRequest() {
+      const endpoint = document.getElementById("melodyEndpoint").value.trim();
+      const title = document.getElementById("melodyTitle").value.trim();
+      const keywords = parseCSV(document.getElementById("melodyKeywords").value);
+      const temperature = Number(document.getElementById("melodyTemperature").value);
+      const topk = Number(document.getElementById("melodyTopk").value);
+      const midiInput = document.getElementById("midiFile");
+      const file = midiInput.files && midiInput.files[0];
+
+      if (!file) {
+        throw new Error("Please select a MIDI file for melody mode.");
+      }
+
+      const form = new FormData();
+      form.append("midi_file", file);
+      form.append("title", title);
+      form.append("temperature", String(temperature));
+      form.append("topk", String(topk));
+      keywords.forEach((k) => form.append("keywords", k));
+
+      return {
+        url: getBaseUrl() + endpoint,
+        method: "POST",
+        body: form,
+        preview: {
+          mode: "melody",
+          endpoint,
+          title,
+          keywords,
+          temperature,
+          topk,
+          midi_file: file.name
+        }
+      };
+    }
+
+    function buildParodyRequest() {
+      const endpoint = document.getElementById("parodyEndpoint").value.trim();
+      const title = document.getElementById("parodyTitle").value.trim();
+      const keywords = parseCSV(document.getElementById("parodyKeywords").value);
+      const temperature = Number(document.getElementById("parodyTemperature").value);
+      const topk = Number(document.getElementById("parodyTopk").value);
+      const maxTokens = Number(document.getElementById("parodyMaxTokens").value);
+      const lyricsLines = document.getElementById("parodyLyrics").value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const payload = {
+        title,
+        lyrics_lines: lyricsLines,
+        keywords,
+        temperature,
+        topk,
+        max_tokens: maxTokens
+      };
+
+      return {
+        url: getBaseUrl() + endpoint,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        preview: {
+          mode: "parody",
+          endpoint,
+          payload
+        }
+      };
+    }
+
+    function buildRequestFromMode() {
+      return modeEl.value === "melody"
+        ? buildMelodyRequest()
+        : buildParodyRequest();
+    }
+
+    function makeCurlPreview(req) {
+      const safeUrl = req.url.replace(/"/g, '\\"');
+      if (modeEl.value === "melody") {
+        return [
+          "curl -X POST \"" + safeUrl + "\" \\",
+          "  -F \"midi_file=@your_file.mid\" \\",
+          "  -F \"title=" + (req.preview.title || "") + "\" \\",
+          "  -F \"temperature=" + req.preview.temperature + "\" \\",
+          "  -F \"topk=" + req.preview.topk + "\" \\",
+          "  -F \"keywords=" + (req.preview.keywords[0] || "keyword1") + "\""
+        ].join("\n");
+      }
+      const data = JSON.stringify(req.preview.payload).replace(/"/g, '\\"');
+      return [
+        "curl -X POST \"" + safeUrl + "\" \\",
+        "  -H \"Content-Type: application/json\" \\",
+        "  -d \"" + data + "\""
+      ].join("\n");
+    }
+
+    async function sendRequest() {
+      setStatus("Sending request...", false);
+      outputEl.textContent = pretty({ status: "pending" });
+
+      try {
+        const req = buildRequestFromMode();
+        const res = await fetch(req.url, {
+          method: req.method,
+          headers: req.headers,
+          body: req.body
+        });
+
+        let parsed;
+        const text = await res.text();
+        try {
+          parsed = JSON.parse(text);
+        } catch (_) {
+          parsed = { raw_text: text };
+        }
+
+        if (!res.ok) {
+          setStatus("Request failed: HTTP " + res.status, true);
+          outputEl.textContent = pretty({
+            ok: false,
+            status: res.status,
+            body: parsed,
+            request_preview: req.preview
+          });
+          return;
+        }
+
+        setStatus("Success (HTTP " + res.status + ")", false);
+        outputEl.textContent = pretty({
+          ok: true,
+          status: res.status,
+          body: parsed,
+          request_preview: req.preview
+        });
+      } catch (err) {
+        setStatus(err.message || "Unexpected error", true);
+        outputEl.textContent = pretty({
+          ok: false,
+          error: String(err)
+        });
+      }
+    }
+
+    function showCurl() {
+      try {
+        const req = buildRequestFromMode();
+        setStatus("Generated cURL preview", false);
+        outputEl.textContent = makeCurlPreview(req);
+      } catch (err) {
+        setStatus(err.message || "Unable to build cURL preview", true);
+      }
+    }
+
+    function clearOutput() {
+      setStatus("", false);
+      outputEl.textContent = '{ "info": "Output cleared." }';
+    }
+
+    modeEl.addEventListener("change", updateModeUI);
+    sendBtn.addEventListener("click", sendRequest);
+    curlBtn.addEventListener("click", showCurl);
+    clearBtn.addEventListener("click", clearOutput);
+
+    updateModeUI();
+  </script>
+</body>
+</html>

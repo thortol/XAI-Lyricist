@@ -21,6 +21,14 @@ from torch.nn import CrossEntropyLoss
 from positional_encodings.torch_encodings import PositionalEncoding1D
 import prosodic as p
 
+
+def _syllables(obj):
+    """Compatibility shim: prosodic versions expose syllables as method or property."""
+    syll = getattr(obj, "syllables", None)
+    if syll is None:
+        return []
+    return syll() if callable(syll) else syll
+
     
 class Bart(nn.Module):
     def __init__(self, event2word_dict, word2event_dict, model_pth, src_tknzr, tgt_tknzr, hidden_size, enc_layers, num_heads, enc_ffn_kernel_size, dropout, cond=True):
@@ -188,7 +196,7 @@ class Bart(nn.Module):
             token_str = tgt_tknzr.decode(word_id)
             word_str = token_str.strip()
             word_txt = p.Text(word_str)
-            word_syll_num = len(word_txt.syllables())
+            word_syll_num = len(_syllables(word_txt))
             
             if token_str[0] == ' ':
                 num_syllables_remaining = num_syllables_remaining - word_syll_num
@@ -287,7 +295,7 @@ class Bart(nn.Module):
             token_str = tgt_tknzr.decode(word_id)
             word_str = token_str.strip()
             word_txt = p.Text(word_str)
-            word_syll_num = len(word_txt.syllables())
+            word_syll_num = len(_syllables(word_txt))
             
             if token_str[0] == ' ':
                 num_syllables_remaining = num_syllables_remaining - word_syll_num

@@ -174,7 +174,7 @@ if __name__ == '__main__':
     src_tknzr = BartTokenizer.from_pretrained(hparams['enc_tknzr_dir'])
     tgt_tknzr = BartTokenizer.from_pretrained(hparams['dec_tknzr_dir'])
 
-    ckpt_path = os.path.join('./checkpoints', 'bestM2LCkpt.pt')
+    ckpt_path = './bestM2LCkpt.pt'
     # ckpt_path = '/home/qihao/bestM2LCkpt.pt'
     # ckpt_path = '/data1/qihao/XAI-Lyricist/checkpoints/bart/BartForConditionalGeneration_20230814:025717_lr5e-05/bestM2LCkpt.pt'
 
