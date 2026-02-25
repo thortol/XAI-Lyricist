@@ -34,6 +34,10 @@ class RuntimeAssets:
     load_warning: str
 
 
+SRC_KEYS = ["meter", "length", "remainder"]
+TGT_KEYS = ["word", "remainder"]
+
+
 class ParodyRequest(BaseModel):
     title: str = Field(default="untitled")
     lyrics_lines: List[str] = Field(default_factory=list)
@@ -410,7 +414,6 @@ def _load_assets() -> RuntimeAssets:
     from transformers import BartTokenizer
 
     from models.conbart import Bart
-    from models.dataloader import src_KEYS, tgt_KEYS
     from utils.hparams import set_hparams
     from utils.prosody_utils import getProsody
 
@@ -500,8 +503,8 @@ def _load_assets() -> RuntimeAssets:
         miditoolkit=miditoolkit,
         prosodic=prosodic,
         get_prosody=getProsody,
-        src_keys=list(src_KEYS),
-        tgt_keys=list(tgt_KEYS),
+        src_keys=list(SRC_KEYS),
+        tgt_keys=list(TGT_KEYS),
         model_path=model_path,
         checkpoint_path=checkpoint_path,
         dict_path=dict_path,
@@ -529,6 +532,7 @@ def on_startup() -> None:
     except Exception as exc:
         app.state.assets = None
         app.state.load_error = str(exc)
+        raise RuntimeError(f"Model load failed during startup: {exc}") from exc
 
 
 @app.get("/health")
