@@ -372,7 +372,7 @@ def _get_checkpoint_vocab_size(state_dict: Any) -> Optional[int]:
 
 def _preferred_added_tokens() -> List[str]:
     tokens = [f"<syllable_{idx}>" for idx in range(50)]
-    tokens.extend(["<title>", "<keywords>", "<template>", "<strong>", "<substrong>", "<weak>", "<sep>"])
+    tokens.extend(["<keywords>", "<title>", "<sep>", "<template>", "<strong>", "<substrong>", "<weak>"])
     return tokens
 
 
@@ -557,7 +557,7 @@ def generate_melody(
     keywords: Optional[List[str]] = Form(None),
     temperature: float = Form(1.2),
     topk: int = Form(3),
-    max_tokens: int = Form(1024),
+    max_tokens: int = Form(512),
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
     if not midi_file.filename:
