@@ -1,0 +1,11 @@
+setuptools>=65.0.0,<70.0.0
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+torch
+transformers
+miditoolkit
+prosodic
+positional-encodings
+nltk

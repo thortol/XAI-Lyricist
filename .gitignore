@@ -44,3 +44,6 @@ build/
 *.bin
 *.h5
 *.onnx
+
+# NLTK data cache
+.nltk_data/

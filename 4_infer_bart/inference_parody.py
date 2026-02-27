@@ -68,8 +68,8 @@ if __name__ == '__main__':
     src_tknzr = BartTokenizer.from_pretrained(hparams['enc_tknzr_dir'])
     tgt_tknzr = BartTokenizer.from_pretrained(hparams['dec_tknzr_dir'])
 
-    # ckpt_path = os.path.join('./checkpoints', 'bestM2LCkpt.pt')
-    ckpt_path = '/home/qihao/bestM2LCkpt.pt'
+    ckpt_path = './bestM2LCkpt.pt'
+    # ckpt_path = '/home/qihao/bestM2LCkpt.pt'
 
     # load dictionary
     event2word_dict, word2event_dict, lyric2word_dict, word2lyric_dict = pickle.load(open(f"{hparams['binary_data_dir']}/m2l_dict.pkl", 'rb'))

@@ -37,6 +37,74 @@ The parody-based inference uses lyrics as input. The system analyses the prosody
 python ./4_infer_bart/inference_parody.py -config ./configs/configs.yaml
 ```
 
+## API Deployment (Docker + Render)
+
+This repository includes a FastAPI service in `api/main.py` and can be deployed to Render with Docker.
+
+### 1. Local Docker smoke test
+```bash
+docker buildx build --platform linux/amd64 -t xai-lyricist-api --load .
+docker run --rm -p 10000:10000 -e PORT=10000 xai-lyricist-api
+```
+
+Then check health:
+```bash
+curl http://localhost:10000/health
+```
+
+### 2. Option 1 (Recommended): Deploy a prebuilt image (no checkpoint in Git)
+
+Use this path if you cannot commit `bestM2LCkpt.pt` to GitHub.
+
+#### 2.1 Build and push image to a registry (example: Docker Hub)
+Set your values:
+```bash
+export DOCKERHUB_USER="<dockerhub-username>"
+export DOCKERHUB_PAT="<dockerhub-access-token>"
+export IMAGE="${DOCKERHUB_USER}/xai-lyricist-api"
+export TAG="$(date +%Y%m%d-%H%M%S)"
+```
+
+Login and push:
+```bash
+echo "$DOCKERHUB_PAT" | docker login -u "$DOCKERHUB_USER" --password-stdin
+docker buildx build --platform linux/amd64 -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" --push .
+```
+
+The checkpoint is baked into the image during build (`COPY bestM2LCkpt.pt /app/bestM2LCkpt.pt`), so Render does not need it from GitHub.
+
+#### 2.2 Create Render service from that image
+1. In Render, click `New +` -> `Web Service`.
+2. Choose `Deploy an existing image from a registry`.
+3. Image URL: `docker.io/<dockerhub-username>/xai-lyricist-api:latest` (or a pinned tag).
+4. If private, add registry credentials in Render (username + token/PAT).
+5. Set:
+   - Health Check Path: `/health`
+   - Environment Variables:
+     - `XAI_DEVICE=cpu`
+     - `XAI_CHECKPOINT_PATH=/app/bestM2LCkpt.pt`
+     - `XAI_DICT_PATH=/app/binary/m2l_dict.pkl`
+     - `XAI_CONFIG_PATH=/app/configs/configs.yaml`
+6. Deploy.
+
+#### 2.3 Verify deployment
+```bash
+curl https://<your-render-service>.onrender.com/health
+```
+
+### 3. Production behavior
+- Uvicorn runs on `0.0.0.0:$PORT` (Render-compatible).
+- API startup is fail-fast: deployment fails if model assets cannot be loaded.
+
+### Alternative: Git-based Render Blueprint
+- `render.yaml` is included for Git-based Blueprint deployment.
+- This still requires the Docker build context to include `bestM2LCkpt.pt`.
+- If the checkpoint is not in the repo, prefer the prebuilt image flow above.
+
+### Notes on Render free tier
+- Free tier services can spin down when idle (cold starts).
+- This model artifact is large; memory constraints may require upgrading plan for stable uptime.
+
 
 ### To cite this work
 ```

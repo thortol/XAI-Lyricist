@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: xai-lyricist-api
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: XAI_DEVICE
+        value: cpu
+      - key: XAI_CHECKPOINT_PATH
+        value: /app/bestM2LCkpt.pt
+      - key: XAI_DICT_PATH
+        value: /app/binary/m2l_dict.pkl
+      - key: XAI_CONFIG_PATH
+        value: /app/configs/configs.yaml
