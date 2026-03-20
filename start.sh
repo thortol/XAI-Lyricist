@@ -29,16 +29,16 @@ fi
 source "$VENV_DIR/bin/activate"
 
 echo "[start.sh] Upgrading pip/setuptools/wheel"
-python -m pip install --upgrade pip setuptools wheel
+"$PYTHON_BIN" -m pip install --upgrade pip setuptools wheel
 
 echo "[start.sh] Installing backend dependencies"
-python -m pip install -r requirements-api.txt
+"$PYTHON_BIN" -m pip install -r requirements-api.txt
 
 export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 export NLTK_DATA="$NLTK_DATA_DIR${NLTK_DATA:+:$NLTK_DATA}"
 
 echo "[start.sh] Ensuring NLTK data is available at $NLTK_DATA_DIR"
-python - <<PY || true
+"$PYTHON_BIN" - <<PY || true
 import os
 import ssl
 import nltk
@@ -61,4 +61,4 @@ for pkg in ("punkt", "punkt_tab"):
 PY
 
 echo "[start.sh] Starting API at http://$HOST:$PORT"
-exec uvicorn api.main:app --host "$HOST" --port "$PORT" --reload
+exec "$PYTHON_BIN" -m uvicorn api.main:app --host "$HOST" --port "$PORT" --reload

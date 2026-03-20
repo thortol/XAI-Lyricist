@@ -139,43 +139,30 @@ def _build_melody_src_words(
     if not midi.instruments or not midi.instruments[0].notes:
         raise ValueError("MIDI must contain at least one instrument with notes.")
 
-    notes = midi.instruments[0].notes
     prosody_list = assets.get_prosody(midi_path)
-    if len(prosody_list) != len(notes):
-        raise ValueError("Prosody extraction mismatch with note count.")
+    assert len(prosody_list) == len(midi.instruments[0].notes)
 
-    phrase_groups: List[List[Tuple[int, Any, Tuple[str, str]]]] = []
-    if midi.markers:
-        markers = sorted(midi.markers, key=lambda marker: marker.time)
-        start = -1
-        for marker in markers:
-            end = marker.time
-            group = []
-            for note_idx, note in enumerate(notes):
+    ## group midi by phrase
+    group_by_phrase: Dict[int, List[Tuple[int, Any, Tuple[str, str]]]] = {}
+    start = -1
+    for idx in range(len(midi.markers)):
+        end = midi.markers[idx].time
+        if idx not in group_by_phrase:
+            group_by_phrase[idx] = []
+        for inst in midi.instruments:
+            for nid, note in enumerate(inst.notes):
                 if note.start > start and note.start <= end:
-                    group.append((note_idx, note, prosody_list[note_idx]))
-            phrase_groups.append(group)
-            start = end
-        tail_group = []
-        for note_idx, note in enumerate(notes):
-            if note.start > start:
-                tail_group.append((note_idx, note, prosody_list[note_idx]))
-        if tail_group:
-            phrase_groups.append(tail_group)
-    else:
-        phrase_groups = [[(note_idx, note, prosody_list[note_idx]) for note_idx, note in enumerate(notes)]]
+                    group_by_phrase[idx].append((nid, note, prosody_list[nid]))
+        start = midi.markers[idx].time
 
-    phrase_groups = [group for group in phrase_groups if group]
-    if not phrase_groups:
-        raise ValueError("No phrase groups found in MIDI.")
+    # assert len(keywords) == len(group_by_phrase)
 
-    normalized_keywords = _normalize_keywords(keywords, len(phrase_groups))
-    max_remain = _get_remain_max(assets.lyric2word)
     src_words = _build_title_prefix(title, assets)
     syllable_total = 0
+    max_remain = _get_remain_max(assets.lyric2word)
 
-    for phrase_idx, phrase_notes in enumerate(phrase_groups):
-        line_syllable_num = len(phrase_notes)
+    for _, line in group_by_phrase.items():
+        line_syllable_num = len(line)
         syllable_total += line_syllable_num
         syll_token = _token_id(assets.src_tknzr, f"<syllable_{line_syllable_num}>")
         template_token = _token_id(assets.src_tknzr, "<template>")
@@ -185,22 +172,20 @@ def _build_melody_src_words(
         src_words.append({"meter": template_token, "length": 0, "remainder": 0})
 
         remain = line_syllable_num
-        for _, _, prosody in phrase_notes:
+        for note in line:
             remain -= 1
-            meter_label, length_label = prosody
-            meter_token = _token_id(assets.src_tknzr, meter_label)
-            length_id = assets.event2word.get("Length", {}).get(length_label, 0)
+            mtype, length = note[2][0], note[2][1]
+            meter_token = _token_id(assets.src_tknzr, mtype)
+            length_id = assets.event2word.get("Length", {}).get(length, 0)
             remain_key = f"Remain_{max(0, min(remain, max_remain))}"
             remain_id = assets.lyric2word.get("Remainder", {}).get(remain_key, 0)
             src_words.append({"meter": meter_token, "length": int(length_id), "remainder": int(remain_id)})
 
-        # NOTE: Keywords are NOT added to input - model wasn't trained with them
-        # _append_keyword_tokens(src_words, normalized_keywords[phrase_idx], assets)
         src_words.append({"meter": period_token, "length": 0, "remainder": 0})
 
     eos_id = _token_id(assets.src_tknzr, "</s>")
     src_words.append({"meter": eos_id, "length": 0, "remainder": 0})
-    return src_words, len(phrase_groups), syllable_total
+    return src_words, len(group_by_phrase), syllable_total
 
 
 def _build_parody_src_words(
@@ -255,7 +240,6 @@ def _build_parody_src_words(
             remain_id = assets.lyric2word.get("Remainder", {}).get(remain_key, 0)
             src_words.append({"meter": meter_token, "length": int(length_id), "remainder": int(remain_id)})
 
-        # NOTE: Keywords are NOT added to input - model wasn't trained with them
         # _append_keyword_tokens(src_words, normalized_keywords[line_idx], assets)
         src_words.append({"meter": period_token, "length": 0, "remainder": 0})
 
@@ -581,7 +565,7 @@ def generate_melody(
             tmp.write(payload)
             tmp_path = tmp.name
 
-        src_words, phrase_count, syllable_total = _build_melody_src_words(
+        src_words, phrase_count, _ = _build_melody_src_words(
             midi_path=tmp_path,
             title=title,
             keywords=keywords or [],
@@ -594,7 +578,7 @@ def generate_melody(
             temperature=float(temperature),
             topk=int(topk),
             max_tokens=int(max_tokens),
-            syllable_total=syllable_total,
+            syllable_total=30,
             assets=assets,
         )
     except HTTPException:
