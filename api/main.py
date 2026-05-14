@@ -13,6 +13,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from midi_to_wav import convert
 
 @dataclass
 class RuntimeAssets:
@@ -32,6 +33,7 @@ class RuntimeAssets:
     checkpoint_path: str
     dict_path: str
     load_warning: str
+    midi_files: Dict[str, str]
 
 
 SRC_KEYS = ["meter", "length", "remainder"]
@@ -476,6 +478,15 @@ def _load_assets() -> RuntimeAssets:
         load_warning = f"Loaded checkpoint with strict=False: {strict_exc}"
     model.eval()
 
+    midi_path = os.getenv("MIDI_FILES_PATH", "midi_files")
+    midi_files = {
+        "find my way back home": os.path.join(midi_path, "find_my_way_back_home.mid"),
+        "imagine": os.path.join(midi_path, "imagine.mid"),
+        "million reasons": os.path.join(midi_path, "million_reasons.mid"),
+        "set fire to the rain": os.path.join(midi_path, "set_fire_to_the_rain.mid"),
+        "stay with me": os.path.join(midi_path, "stay_with_me.mid")
+    } # map it to the mid file, hardcoded to prevent attacks
+
     return RuntimeAssets(
         model=model,
         src_tknzr=src_tknzr,
@@ -493,6 +504,7 @@ def _load_assets() -> RuntimeAssets:
         checkpoint_path=checkpoint_path,
         dict_path=dict_path,
         load_warning=load_warning,
+        midi_files=midi_files,
     )
 
 
@@ -540,7 +552,7 @@ def health() -> Dict[str, Any]:
 
 @app.post("/generate/melody")
 def generate_melody(
-    midi_file: UploadFile = File(...),
+    file_name: str = Form(""),
     title: str = Form("untitled"),
     keywords: Optional[List[str]] = Form(None),
     temperature: float = Form(1.2),
@@ -548,23 +560,17 @@ def generate_melody(
     max_tokens: int = Form(512),
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
-    if not midi_file.filename:
-        raise HTTPException(status_code=400, detail="`midi_file` is required.")
-    suffix = Path(midi_file.filename).suffix.lower()
-    if suffix not in {".mid", ".midi"}:
-        raise HTTPException(status_code=400, detail="`midi_file` must be .mid or .midi")
 
-    payload = midi_file.file.read()
-    if not payload:
-        raise HTTPException(status_code=400, detail="Uploaded MIDI file is empty.")
+    if file_name == "":
+        raise HTTPException(status_code=400, detail="`midi_file` is required.")
+
+    if file_name not in assets.midi_files:
+        raise HTTPException(status_code=400, detail="midi file is not found")
+
 
     start_time = time.time()
-    tmp_path = ""
+    tmp_path = assets.midi_files[file_name]
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(payload)
-            tmp_path = tmp.name
-
         src_words, phrase_count, _ = _build_melody_src_words(
             midi_path=tmp_path,
             title=title,
@@ -581,15 +587,14 @@ def generate_melody(
             syllable_total=30,
             assets=assets,
         )
+
+        convert(tmp_path, lyrics_text)
     except HTTPException:
         raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
-    finally:
-        if tmp_path and Path(tmp_path).exists():
-            os.remove(tmp_path)
 
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {

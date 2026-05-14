@@ -14,3 +14,5 @@ services:
         value: /app/binary/m2l_dict.pkl
       - key: XAI_CONFIG_PATH
         value: /app/configs/configs.yaml
+      - key: MIDI_FILES_PATH
+        value: /app/midi_files
