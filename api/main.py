@@ -4,16 +4,18 @@ import os
 import pickle
 import tempfile
 import time
+from dotenv import load_dotenv
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from midi_to_wav import convert
+from database import Database
 
 @dataclass
 class RuntimeAssets:
@@ -34,6 +36,7 @@ class RuntimeAssets:
     dict_path: str
     load_warning: str
     midi_files: Dict[str, str]
+    database: Database
 
 
 SRC_KEYS = ["meter", "length", "remainder"]
@@ -406,6 +409,8 @@ def _load_assets() -> RuntimeAssets:
     import miditoolkit
     import prosodic
 
+    load_dotenv()  
+
     config_path = os.getenv("XAI_CONFIG_PATH", "configs/configs.yaml")
     cfg: Dict[str, Any] = {}
     if Path(config_path).exists():
@@ -487,6 +492,7 @@ def _load_assets() -> RuntimeAssets:
         "stay with me": os.path.join(midi_path, "stay_with_me.mid")
     } # map it to the mid file, hardcoded to prevent attacks
 
+    database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
     return RuntimeAssets(
         model=model,
         src_tknzr=src_tknzr,
@@ -505,6 +511,7 @@ def _load_assets() -> RuntimeAssets:
         dict_path=dict_path,
         load_warning=load_warning,
         midi_files=midi_files,
+        database=database,
     )
 
 
@@ -552,6 +559,7 @@ def health() -> Dict[str, Any]:
 
 @app.post("/generate/melody")
 def generate_melody(
+    request: Request,
     file_name: str = Form(""),
     title: str = Form("untitled"),
     keywords: Optional[List[str]] = Form(None),
@@ -560,6 +568,11 @@ def generate_melody(
     max_tokens: int = Form(512),
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
+
+    token = request.headers.get("Authorization").replace("Bearer ", "")
+
+    if not assets.database.validate_user(token):
+        raise HTTPException(status_code=400, detail="valid user auth token is required")
 
     if file_name == "":
         raise HTTPException(status_code=400, detail="`midi_file` is required.")
@@ -588,7 +601,7 @@ def generate_melody(
             assets=assets,
         )
 
-        convert(tmp_path, lyrics_text)
+        wav_data = convert(tmp_path, lyrics_text)
     except HTTPException:
         raise
     except ValueError as exc:
@@ -596,6 +609,7 @@ def generate_melody(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
 
+    assets.database.insert_song(wav_data, token, title, keywords, lyrics_text, [], {})
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {
         "mode": "melody",

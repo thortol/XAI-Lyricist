@@ -43,11 +43,9 @@ def convert_midi_to_notes(path_to_midi):
 
 
 def renderize_voice(xml_data, out_folder=".", vibpower=1, f0shift=0, synalpha=0.55):
-	VOICE_WAV_PATH = os.path.join(out_folder,"voice.wav")
+	return sinsy_request(xml_data, vibpower, f0shift, synalpha)
 
-	sinsy_request(xml_data, VOICE_WAV_PATH, vibpower, f0shift, synalpha)
-
-def sinsy_request(xml_data, wav_path, vibpower=1, f0shift=0, synalpha=0.55):
+def sinsy_request(xml_data, vibpower=1, f0shift=0, synalpha=0.55):
 
 	headers = {'User-Agent': 'Mozilla/5.0'}
 	payload = {'voice_name': "f00002e_dnn_beta5", 'vibpow': vibpower, 'f0shift': f0shift, "alpha": synalpha}
@@ -63,14 +61,19 @@ def sinsy_request(xml_data, wav_path, vibpower=1, f0shift=0, synalpha=0.55):
 	if url_file_name is None:
 		raise Exception("No wav file found on sinsy.jp :( Try again or create an issue at https://github.com/mathigatti/midi2voice/issues if the problem persists.")
 	else:
-		download(url_file_name, wav_path)
+		return download(url_file_name)
 
 def find_wav_name_on_website(htmlResponse):
     data = json.loads(htmlResponse[0])
     return data["files"]["resultWav"]
 
-def download(url_file_name, wav_path):
-	urllib.request.urlretrieve("https://sinsy.sp.nitech.ac.jp" + url_file_name, wav_path)
+def download(url_file_name):
+    url = "https://sinsy.sp.nitech.ac.jp" + url_file_name
+    
+    with urllib.request.urlopen(url) as response:
+        wav_binary = response.read()  # bytes
+    
+    return wav_binary
 
 
 def sec_to_ticks(s: float, sec_per_beat, divisions) -> int:
@@ -326,7 +329,7 @@ def generate_musicxml(notes_data, lyrics_text, tempo):
 def convert(path_to_midi, lyrics):
     notes, tempo = convert_midi_to_notes(path_to_midi)
     xml_data = generate_musicxml(notes, lyrics, tempo)
-    renderize_voice(xml_data)
+    return renderize_voice(xml_data)
 
 if __name__ == "__main__":
     LYRICS = """

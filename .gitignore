@@ -47,3 +47,5 @@ build/
 
 # NLTK data cache
 .nltk_data/
+
+.env
