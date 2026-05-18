@@ -36,6 +36,7 @@ class RuntimeAssets:
     dict_path: str
     load_warning: str
     midi_files: Dict[str, str]
+    db_audio_files: Dict[str, str]
     database: Database
 
 
@@ -492,6 +493,14 @@ def _load_assets() -> RuntimeAssets:
         "stay with me": os.path.join(midi_path, "stay_with_me.mid")
     } # map it to the mid file, hardcoded to prevent attacks
 
+    db_audio_files = {
+        "find my way back home": "find my way back home.wav",
+        "imagine": "imagine.mp3",
+        "million reasons": "million reasons.wav",
+        "set fire to the rain": "set fire to the rain.wav",
+        "stay with me": "stay with me.wav"
+    }
+
     database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
     return RuntimeAssets(
         model=model,
@@ -511,6 +520,7 @@ def _load_assets() -> RuntimeAssets:
         dict_path=dict_path,
         load_warning=load_warning,
         midi_files=midi_files,
+        db_audio_files=db_audio_files,
         database=database,
     )
 
@@ -558,7 +568,7 @@ def health() -> Dict[str, Any]:
 
 
 @app.post("/generate/melody")
-def generate_melody(
+async def generate_melody(
     request: Request,
     file_name: str = Form(""),
     title: str = Form("untitled"),
@@ -569,6 +579,9 @@ def generate_melody(
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
 
+    if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
+        raise HTTPException(status_code=400, detail="auth token is required")
+    
     token = request.headers.get("Authorization").replace("Bearer ", "")
 
     if not assets.database.validate_user(token):
