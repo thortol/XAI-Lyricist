@@ -9,7 +9,7 @@ class Database:
     def __init__(self, supabase_url, supabase_service_key):
         self.supabase = create_client(supabase_url, supabase_service_key)
     
-    def insert_song(self, wav_file, token, title, prompt, lyrics, word_timings, metadata):
+    def insert_song(self, wav_file, token, title, prompt, lyrics, word_timings, metadata, instrumental):
         user = self.supabase.auth.get_user(token)
         user_id = user.user.id
         filename = f"{uuid.uuid4()}.wav"
@@ -31,7 +31,8 @@ class Database:
             "metadata": metadata,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
-            "wav_path": filename
+            "wav_path": filename,
+            "instrumental_path": instrumental,
         }).execute()
     
     def validate_user(self, token):

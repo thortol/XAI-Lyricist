@@ -596,6 +596,7 @@ async def generate_melody(
 
     start_time = time.time()
     tmp_path = assets.midi_files[file_name]
+    instrumental = assets.db_audio_files[file_name]
     try:
         src_words, phrase_count, _ = _build_melody_src_words(
             midi_path=tmp_path,
@@ -622,7 +623,7 @@ async def generate_melody(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
 
-    assets.database.insert_song(wav_data, token, title, keywords, lyrics_text, [], {})
+    assets.database.insert_song(wav_data, token, title, keywords, lyrics_text, [], {}, instrumental)
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {
         "mode": "melody",
