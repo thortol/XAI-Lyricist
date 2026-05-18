@@ -4,15 +4,18 @@ import os
 import pickle
 import tempfile
 import time
+from dotenv import load_dotenv
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from midi_to_wav import convert
+from database import Database
 
 @dataclass
 class RuntimeAssets:
@@ -32,6 +35,9 @@ class RuntimeAssets:
     checkpoint_path: str
     dict_path: str
     load_warning: str
+    midi_files: Dict[str, str]
+    db_audio_files: Dict[str, str]
+    database: Database
 
 
 SRC_KEYS = ["meter", "length", "remainder"]
@@ -404,6 +410,8 @@ def _load_assets() -> RuntimeAssets:
     import miditoolkit
     import prosodic
 
+    load_dotenv()  
+
     config_path = os.getenv("XAI_CONFIG_PATH", "configs/configs.yaml")
     cfg: Dict[str, Any] = {}
     if Path(config_path).exists():
@@ -476,6 +484,24 @@ def _load_assets() -> RuntimeAssets:
         load_warning = f"Loaded checkpoint with strict=False: {strict_exc}"
     model.eval()
 
+    midi_path = os.getenv("MIDI_FILES_PATH", "midi_files")
+    midi_files = {
+        "Find My Way Back Home": os.path.join(midi_path, "find_my_way_back_home.mid"),
+        "Imagine": os.path.join(midi_path, "imagine.mid"),
+        "Million Reasons": os.path.join(midi_path, "million_reasons.mid"),
+        "Set Fire to the Rain": os.path.join(midi_path, "set_fire_to_the_rain.mid"),
+        "Stay With Me": os.path.join(midi_path, "stay_with_me.mid")
+    } # map it to the mid file, hardcoded to prevent attacks
+
+    db_audio_files = {
+        "Find My Way Back Home": "find my way back home.wav",
+        "Imagine": "imagine.mp3",
+        "Million Reasons": "million reasons.wav",
+        "Set Fire to the Rain": "set fire to the rain.wav",
+        "Stay With Me": "stay with me.wav"
+    }
+
+    database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
     return RuntimeAssets(
         model=model,
         src_tknzr=src_tknzr,
@@ -493,6 +519,9 @@ def _load_assets() -> RuntimeAssets:
         checkpoint_path=checkpoint_path,
         dict_path=dict_path,
         load_warning=load_warning,
+        midi_files=midi_files,
+        db_audio_files=db_audio_files,
+        database=database,
     )
 
 
@@ -539,35 +568,41 @@ def health() -> Dict[str, Any]:
 
 
 @app.post("/generate/melody")
-def generate_melody(
-    midi_file: UploadFile = File(...),
-    title: str = Form("untitled"),
+async def generate_melody(
+    request: Request,
+    file_name: str = Form(""),
+    prompt: str = Form("untitled"),
     keywords: Optional[List[str]] = Form(None),
     temperature: float = Form(1.2),
     topk: int = Form(3),
     max_tokens: int = Form(512),
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
-    if not midi_file.filename:
-        raise HTTPException(status_code=400, detail="`midi_file` is required.")
-    suffix = Path(midi_file.filename).suffix.lower()
-    if suffix not in {".mid", ".midi"}:
-        raise HTTPException(status_code=400, detail="`midi_file` must be .mid or .midi")
 
-    payload = midi_file.file.read()
-    if not payload:
-        raise HTTPException(status_code=400, detail="Uploaded MIDI file is empty.")
+    form = await request.form()
+    print("ALL FIELDS RECEIVED:", dict(form))
+    if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
+        raise HTTPException(status_code=400, detail="auth token is required")
+    
+    token = request.headers.get("Authorization").replace("Bearer ", "")
+
+    if not assets.database.validate_user(token):
+        raise HTTPException(status_code=400, detail="valid user auth token is required")
+
+    if file_name == "":
+        raise HTTPException(status_code=400, detail="`midi_file` is required.")
+
+    if file_name not in assets.midi_files:
+        raise HTTPException(status_code=400, detail="midi file is not found")
+
 
     start_time = time.time()
-    tmp_path = ""
+    tmp_path = assets.midi_files[file_name]
+    instrumental = assets.db_audio_files[file_name]
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(payload)
-            tmp_path = tmp.name
-
         src_words, phrase_count, _ = _build_melody_src_words(
             midi_path=tmp_path,
-            title=title,
+            title=prompt,
             keywords=keywords or [],
             assets=assets,
         )
@@ -581,32 +616,38 @@ def generate_melody(
             syllable_total=30,
             assets=assets,
         )
+
+        lyrics_text = lyrics_text.replace(".", "")
+
+        wav_data, karaoke_timing = convert(tmp_path, lyrics_text)
     except HTTPException:
         raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
-    finally:
-        if tmp_path and Path(tmp_path).exists():
-            os.remove(tmp_path)
 
+    song_id = assets.database.insert_song(wav_data, token, file_name, prompt, lyrics_text, karaoke_timing, {}, instrumental)
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {
-        "mode": "melody",
-        "title": title,
-        "lyrics_text": lyrics_text,
-        "lyrics_lines": lyrics_lines,
-        "meta": {
-            "phrase_count": phrase_count,
-            "temperature": float(temperature),
-            "topk": int(topk),
-            "max_tokens": int(max_tokens),
-            "device": str(assets.device),
-            "elapsed_ms": elapsed_ms,
-            "perplexity": float(ppl),
-        },
+        "song_id": song_id
     }
+
+    # {
+    #     "mode": "melody",
+    #     "title": file_name,
+    #     "lyrics_text": lyrics_text,
+    #     "lyrics_lines": lyrics_lines,
+    #     "meta": {
+    #         "phrase_count": phrase_count,
+    #         "temperature": float(temperature),
+    #         "topk": int(topk),
+    #         "max_tokens": int(max_tokens),
+    #         "device": str(assets.device),
+    #         "elapsed_ms": elapsed_ms,
+    #         "perplexity": float(ppl),
+    #     },
+    # }
 
 
 @app.post("/generate/parody")
