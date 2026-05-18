@@ -177,13 +177,35 @@ def build_timeline(notes_data, syllables, ticks_per_meas, sec_per_beat, division
     """
     # Step 1: interleave notes with rests
     raw = []   # (start_tick, end_tick, pitch, lyric)
+    karaoke_timing = []
     cursor = 0
+    temp_start = 0
+    temp_word = ""
     for i, (pitch_str, t_start, t_end) in enumerate(notes_data):
         st = sec_to_ticks(t_start, sec_per_beat, divisions)
         et = sec_to_ticks(t_end, sec_per_beat, divisions)
         if st > cursor:
             raw.append((cursor, st, None, None))   # rest
         raw.append((st, et, parse_pitch(pitch_str), syllables[i]))
+        if syllables[i][1] == "single":
+            karaoke_timing.append({
+                "start": t_start,
+                "end": t_end,
+                "word": syllables[i][0],
+                "index": len(karaoke_timing)
+            })
+        elif syllables[i][1] == "begin":
+            temp_start = t_start
+            temp_word = syllables[i][0]
+        elif syllables[i][1] == "end":
+            karaoke_timing.append({
+                "start": temp_start,
+                "end": t_end,
+                "word": temp_word + syllables[i][0],
+                "index": len(karaoke_timing)
+            })
+        else:
+            temp_word += syllables[i][0]
         cursor = et
 
     # Step 2: split segments that cross barlines
@@ -199,7 +221,7 @@ def build_timeline(notes_data, syllables, ticks_per_meas, sec_per_beat, division
                 segments.append((cursor, chunk_end, pitch, lyric if first else None, is_cont))
             cursor = chunk_end
             first = False
-    return segments
+    return segments, karaoke_timing
 
 
 def generate_musicxml(notes_data, lyrics_text, tempo):
@@ -226,7 +248,7 @@ def generate_musicxml(notes_data, lyrics_text, tempo):
     
     notes_data = notes_data[:n_sylls]
 
-    segments = build_timeline(notes_data, syllables, TICKS_PER_MEAS, SEC_PER_BEAT, DIVISIONS)
+    segments, karaoke_timing = build_timeline(notes_data, syllables, TICKS_PER_MEAS, SEC_PER_BEAT, DIVISIONS)
 
     # Group into measures
     measures = {}
@@ -324,25 +346,16 @@ def generate_musicxml(notes_data, lyrics_text, tempo):
         out.append('    </measure>')
 
     out += ['  </part>', '</score-partwise>']
-    return '\n'.join(out)
+    return '\n'.join(out), karaoke_timing
 
 def convert(path_to_midi, lyrics):
     notes, tempo = convert_midi_to_notes(path_to_midi)
-    xml_data = generate_musicxml(notes, lyrics, tempo)
-    return renderize_voice(xml_data)
+    xml_data, karaoke_timing = generate_musicxml(notes, lyrics, tempo)
+    return renderize_voice(xml_data), karaoke_timing
 
 if __name__ == "__main__":
     LYRICS = """
-all we have
-to you i dream about is to be the same thing
-to the things i do we do yeah
-to you i dream about is to be the same thing
-to the things i do and i do
-and i'm through with that dream
-and i'm through that dream
-and i'll be that same
-and i'll be that same girl
-you and me i know
+she feels good. for her sad songs and i love her sweet and i love. for my sad songs she feel all right. for your sad songs and i love her sweet and i love. for my sad songs she and i feel. but i'm her so sad song. i'm the perfect man. and i'm the first good friend. but i'm her best girl she needs. she's my perfect friend.
 """
     convert(r"/Users/caizhenzhi/Documents/cocolyricist/XAI-Lyricist/imagine_midi_test.mid", LYRICS)
     

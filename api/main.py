@@ -486,19 +486,19 @@ def _load_assets() -> RuntimeAssets:
 
     midi_path = os.getenv("MIDI_FILES_PATH", "midi_files")
     midi_files = {
-        "find my way back home": os.path.join(midi_path, "find_my_way_back_home.mid"),
-        "imagine": os.path.join(midi_path, "imagine.mid"),
-        "million reasons": os.path.join(midi_path, "million_reasons.mid"),
-        "set fire to the rain": os.path.join(midi_path, "set_fire_to_the_rain.mid"),
-        "stay with me": os.path.join(midi_path, "stay_with_me.mid")
+        "Find My Way Back Home": os.path.join(midi_path, "find_my_way_back_home.mid"),
+        "Imagine": os.path.join(midi_path, "imagine.mid"),
+        "Million Reasons": os.path.join(midi_path, "million_reasons.mid"),
+        "Set Fire to the Rain": os.path.join(midi_path, "set_fire_to_the_rain.mid"),
+        "Stay With Me": os.path.join(midi_path, "stay_with_me.mid")
     } # map it to the mid file, hardcoded to prevent attacks
 
     db_audio_files = {
-        "find my way back home": "find my way back home.wav",
-        "imagine": "imagine.mp3",
-        "million reasons": "million reasons.wav",
-        "set fire to the rain": "set fire to the rain.wav",
-        "stay with me": "stay with me.wav"
+        "Find My Way Back Home": "find my way back home.wav",
+        "Imagine": "imagine.mp3",
+        "Million Reasons": "million reasons.wav",
+        "Set Fire to the Rain": "set fire to the rain.wav",
+        "Stay With Me": "stay with me.wav"
     }
 
     database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
@@ -571,7 +571,7 @@ def health() -> Dict[str, Any]:
 async def generate_melody(
     request: Request,
     file_name: str = Form(""),
-    title: str = Form("untitled"),
+    prompt: str = Form("untitled"),
     keywords: Optional[List[str]] = Form(None),
     temperature: float = Form(1.2),
     topk: int = Form(3),
@@ -579,6 +579,8 @@ async def generate_melody(
 ) -> Dict[str, Any]:
     assets = _ensure_assets()
 
+    form = await request.form()
+    print("ALL FIELDS RECEIVED:", dict(form))
     if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
         raise HTTPException(status_code=400, detail="auth token is required")
     
@@ -600,7 +602,7 @@ async def generate_melody(
     try:
         src_words, phrase_count, _ = _build_melody_src_words(
             midi_path=tmp_path,
-            title=title,
+            title=prompt,
             keywords=keywords or [],
             assets=assets,
         )
@@ -615,7 +617,9 @@ async def generate_melody(
             assets=assets,
         )
 
-        wav_data = convert(tmp_path, lyrics_text)
+        lyrics_text = lyrics_text.replace(".", "")
+
+        wav_data, karaoke_timing = convert(tmp_path, lyrics_text)
     except HTTPException:
         raise
     except ValueError as exc:
@@ -623,23 +627,27 @@ async def generate_melody(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
 
-    assets.database.insert_song(wav_data, token, title, keywords, lyrics_text, [], {}, instrumental)
+    song_id = assets.database.insert_song(wav_data, token, file_name, prompt, lyrics_text, karaoke_timing, {}, instrumental)
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {
-        "mode": "melody",
-        "title": title,
-        "lyrics_text": lyrics_text,
-        "lyrics_lines": lyrics_lines,
-        "meta": {
-            "phrase_count": phrase_count,
-            "temperature": float(temperature),
-            "topk": int(topk),
-            "max_tokens": int(max_tokens),
-            "device": str(assets.device),
-            "elapsed_ms": elapsed_ms,
-            "perplexity": float(ppl),
-        },
+        "song_id": song_id
     }
+
+    # {
+    #     "mode": "melody",
+    #     "title": file_name,
+    #     "lyrics_text": lyrics_text,
+    #     "lyrics_lines": lyrics_lines,
+    #     "meta": {
+    #         "phrase_count": phrase_count,
+    #         "temperature": float(temperature),
+    #         "topk": int(topk),
+    #         "max_tokens": int(max_tokens),
+    #         "device": str(assets.device),
+    #         "elapsed_ms": elapsed_ms,
+    #         "perplexity": float(ppl),
+    #     },
+    # }
 
 
 @app.post("/generate/parody")

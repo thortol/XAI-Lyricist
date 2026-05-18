@@ -20,7 +20,7 @@ class Database:
             file_options={"content-type": "audio/wav"}
         )
 
-        self.supabase.table("songs").insert({
+        response = self.supabase.table("songs").insert({
             "user_id": user_id,
             "title": title,
             "prompt": prompt,
@@ -33,7 +33,9 @@ class Database:
             "updated_at": datetime.now().isoformat(),
             "wav_path": filename,
             "instrumental_path": instrumental,
-        }).execute()
+        }).select("id").execute()
+
+        return response.data[0]['id']
     
     def validate_user(self, token):
         try:
