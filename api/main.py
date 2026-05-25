@@ -146,22 +146,36 @@ def _build_melody_src_words(
         raise ValueError("MIDI must contain at least one instrument with notes.")
 
     prosody_list = assets.get_prosody(midi_path)
-    assert len(prosody_list) == len(midi.instruments[0].notes)
+    notes = sorted(midi.instruments[0].notes, key=lambda n: n.start)
+    assert len(prosody_list) == len(notes)
 
-    ## group midi by phrase
+    # ── phrase boundary detection ──────────────────────────────────────────
+    if midi.markers:
+        # original path: use existing markers
+        phrase_end_times = [m.time for m in midi.markers]
+    else:
+        # fallback: split on note gaps >= 1 beat
+        tpb = midi.ticks_per_beat  # ticks per beat
+        gap_threshold = tpb        # 1 beat — tune this if needed
+        phrase_end_times = [
+            notes[i].end
+            for i in range(len(notes) - 1)
+            if notes[i + 1].start - notes[i].end >= gap_threshold
+        ]
+        phrase_end_times.append(notes[-1].end)
+    # ──────────────────────────────────────────────────────────────────────
+
+    # group notes by phrase using phrase_end_times
     group_by_phrase: Dict[int, List[Tuple[int, Any, Tuple[str, str]]]] = {}
+    phrase_idx = 0
     start = -1
-    for idx in range(len(midi.markers)):
-        end = midi.markers[idx].time
-        if idx not in group_by_phrase:
-            group_by_phrase[idx] = []
+    for phrase_idx, end in enumerate(phrase_end_times):
+        group_by_phrase[phrase_idx] = []
         for inst in midi.instruments:
             for nid, note in enumerate(inst.notes):
                 if note.start > start and note.start <= end:
-                    group_by_phrase[idx].append((nid, note, prosody_list[nid]))
-        start = midi.markers[idx].time
-
-    # assert len(keywords) == len(group_by_phrase)
+                    group_by_phrase[phrase_idx].append((nid, note, prosody_list[nid]))
+        start = end
 
     src_words = _build_title_prefix(title, assets)
     syllable_total = 0
