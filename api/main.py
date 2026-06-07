@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from openai import OpenAI
 
 from midi_to_wav import convert
 from database import Database
@@ -38,6 +39,7 @@ class RuntimeAssets:
     midi_files: Dict[str, str]
     db_audio_files: Dict[str, str]
     database: Database
+    openai_client: Any
 
 
 SRC_KEYS = ["meter", "length", "remainder"]
@@ -516,6 +518,7 @@ def _load_assets() -> RuntimeAssets:
     }
 
     database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+    openai_client = OpenAI(api_key=os.getenv("OPENAPI_KEY"))
     return RuntimeAssets(
         model=model,
         src_tknzr=src_tknzr,
@@ -536,6 +539,7 @@ def _load_assets() -> RuntimeAssets:
         midi_files=midi_files,
         db_audio_files=db_audio_files,
         database=database,
+        openai_client=openai_client
     )
 
 
@@ -550,6 +554,16 @@ def _ensure_assets() -> RuntimeAssets:
         raise HTTPException(status_code=503, detail=f"Model is not ready: {exc}") from exc
     return app.state.assets
 
+def is_flagged(client, sentence):
+    try:
+        response = client.moderations.create(
+            model="omni-moderation-latest",
+            input=sentence,
+        )
+        return response.results[0].flagged
+    except:
+        # assume all messages are safe if openai is down
+        return False
 
 @app.on_event("startup")
 def on_startup() -> None:
@@ -613,35 +627,40 @@ async def generate_melody(
     start_time = time.time()
     tmp_path = assets.midi_files[file_name]
     instrumental = assets.db_audio_files[file_name]
-    try:
-        src_words, phrase_count, _ = _build_melody_src_words(
-            midi_path=tmp_path,
-            title=prompt,
-            keywords=keywords or [],
-            assets=assets,
-        )
-        enc_inputs, dec_inputs = _build_model_inputs(src_words, assets)
-        lyrics_text, lyrics_lines, ppl = _generate(
-            enc_inputs=enc_inputs,
-            dec_inputs=dec_inputs,
-            temperature=float(temperature),
-            topk=int(topk),
-            max_tokens=int(max_tokens),
-            syllable_total=30,
-            assets=assets,
-        )
+    flagged = is_flagged(assets.openai_client, prompt)
+    if not flagged:
+        try:
+            src_words, phrase_count, _ = _build_melody_src_words(
+                midi_path=tmp_path,
+                title=prompt,
+                keywords=keywords or [],
+                assets=assets,
+            )
+            enc_inputs, dec_inputs = _build_model_inputs(src_words, assets)
+            lyrics_text, lyrics_lines, ppl = _generate(
+                enc_inputs=enc_inputs,
+                dec_inputs=dec_inputs,
+                temperature=float(temperature),
+                topk=int(topk),
+                max_tokens=int(max_tokens),
+                syllable_total=30,
+                assets=assets,
+            )
 
-        lyrics_text = lyrics_text.replace(".", "")
+            lyrics_text = lyrics_text.replace(".", "")
+            flagged = is_flagged(assets.openai_client, lyrics_text)
 
-        wav_data, karaoke_timing = convert(tmp_path, lyrics_text)
-    except HTTPException:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
-
-    song_id = assets.database.insert_song(wav_data, token, file_name, prompt, lyrics_text, karaoke_timing, {}, instrumental)
+            wav_data, karaoke_timing = convert(tmp_path, lyrics_text)
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Melody generation failed: {exc}") from exc
+    if flagged:
+        song_id = assets.database.insert_song(None, token, file_name, prompt, "", [], {}, instrumental, flagged)
+    else:
+        song_id = assets.database.insert_song(wav_data, token, file_name, prompt, lyrics_text, karaoke_timing, {}, instrumental, flagged)
     elapsed_ms = int((time.time() - start_time) * 1000)
     return {
         "song_id": song_id
