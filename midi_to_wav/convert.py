@@ -353,6 +353,10 @@ def convert(path_to_midi, lyrics):
     xml_data, karaoke_timing = generate_musicxml(notes, lyrics, tempo)
     return renderize_voice(xml_data), karaoke_timing
 
+def get_syllables(path_to_midi):
+    notes, tempo = convert_midi_to_notes(path_to_midi)
+    return len(notes)
+
 if __name__ == "__main__":
     LYRICS = """Imagine there's no heaven
 It's easy if you try
