@@ -119,11 +119,13 @@ The song that you are trying to write should have {get_syllables(midi_files[body
 Conversation:
 {convo}
 
-Return only the lyrics of the song. End each line with a single \n, do not specify where is the verse or chorus. Do not use words with ` like we`ll
+Return only the lyrics of the song. End each line with a single \n, and each section with \n\n. 
+There should be 3 sections, intro, verse and chorus. 
+Do not use words with ` like 'we`ll'.
 """)
-    if database.validate_user(token):
-        wav_data, karaoke_timing = convert(midi_files[body.song_title], response.output_text)
-        song_id = database.insert_song(wav_data, token, body.song_title, "temporary prompt", response.output_text, karaoke_timing, {}, db_audio_files[body.song_title], False)
+    # if database.validate_user(token):
+    #     wav_data, karaoke_timing = convert(midi_files[body.song_title], response.output_text)
+    #     song_id = database.insert_song(wav_data, token, body.song_title, "temporary prompt", response.output_text, karaoke_timing, {}, db_audio_files[body.song_title], False)
 
 
-    return {"reply": response.output_text}
+    return {"lyrics": response.output_text}
