@@ -51,6 +51,12 @@ class SongWritingRequest(BaseModel):
     song_title: str
     chat_history: list[Message]
 
+class LyricsRequest(BaseModel):
+    song_title: str
+    intro: str
+    verse: str
+    chorus: str
+
 @router.post("/song-writing")
 async def song_writing(
     body: SongWritingRequest,
@@ -119,13 +125,50 @@ The song that you are trying to write should have {get_syllables(midi_files[body
 Conversation:
 {convo}
 
+Output Format:
+
+<intro lyrics>
+
+<verse lyrics>
+
+<chorus lyrics>
+
 Return only the lyrics of the song. End each line with a single \n, and each section with \n\n. 
 There should be 3 sections, intro, verse and chorus. 
-Do not use words with ` like 'we`ll'.
+Do not include any apostrophe, headings, labels, numbering, markdown, parentheses, quotation marks, or explanations.
 """)
-    # if database.validate_user(token):
-    #     wav_data, karaoke_timing = convert(midi_files[body.song_title], response.output_text)
-    #     song_id = database.insert_song(wav_data, token, body.song_title, "temporary prompt", response.output_text, karaoke_timing, {}, db_audio_files[body.song_title], False)
 
+    print(response.output_text)
+    return {"reply": "Generating song now!", "lyrics": response.output_text}
 
-    return {"lyrics": response.output_text}
+@router.post("/publish-song")
+async def song_writing(
+    body: LyricsRequest,
+    request: Request
+) -> Dict[str, str]:
+    
+    form = await request.form()
+    print("ALL FIELDS RECEIVED:", dict(form))
+    print(body.song_title)
+
+    # if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
+    #     raise HTTPException(status_code=400, detail="auth token is required")
+    
+    token = request.headers.get("Authorization").replace("Bearer ", "")
+
+    # if not database.validate_user(token):
+    #     raise HTTPException(status_code=400, detail="valid user auth token is required")
+
+    if body.song_title not in midi_files:
+        raise HTTPException(status_code=400, detail="valid song title is required")
+    
+    lyrics = (body.intro.strip() + "\n" + body.verse.strip() + "\n" + body.chorus.strip()).strip()
+    
+    print(lyrics)
+    if database.validate_user(token):
+        wav_data, karaoke_timing = convert(midi_files[body.song_title], lyrics)
+        song_id = database.insert_song(wav_data, token, body.song_title, "temporary prompt", lyrics, karaoke_timing, {}, db_audio_files[body.song_title], False)
+    print(song_id)
+    return {
+        "song_id": song_id
+    }
