@@ -18,7 +18,8 @@ midi_files = {
     "Imagine": os.path.join(midi_path, "imagine.mid"),
     "Million Reasons": os.path.join(midi_path, "million_reasons.mid"),
     "Set Fire to the Rain": os.path.join(midi_path, "set_fire_to_the_rain.mid"),
-    "Stay With Me": os.path.join(midi_path, "stay_with_me.mid")
+    "Stay With Me": os.path.join(midi_path, "stay_with_me.mid"),
+    "You Are My Sunshine": os.path.join(midi_path, "you_are_my_sunshine.mid"),
 } # map it to the mid file, hardcoded to prevent attacks
 
 db_audio_files = {
@@ -26,7 +27,8 @@ db_audio_files = {
     "Imagine": "imagine.mp3",
     "Million Reasons": "million reasons.wav",
     "Set Fire to the Rain": "set fire to the rain.wav",
-    "Stay With Me": "stay with me.wav"
+    "Stay With Me": "stay with me.wav",
+    "You Are My Sunshine": "you are my sunshine.mp3",
 }
 
 database = Database(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
@@ -165,10 +167,12 @@ async def song_writing(
     lyrics = (body.intro.strip() + "\n" + body.verse.strip() + "\n" + body.chorus.strip()).strip()
     
     print(lyrics)
+
+    song_id = ""
     if database.validate_user(token):
         wav_data, karaoke_timing = convert(midi_files[body.song_title], lyrics)
         song_id = database.insert_song(wav_data, token, body.song_title, "temporary prompt", lyrics, karaoke_timing, {}, db_audio_files[body.song_title], False)
-    print(song_id)
+
     return {
         "song_id": song_id
     }
