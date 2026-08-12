@@ -43,6 +43,8 @@ question_bank = [
     "Is there a favourite word or phrase you'd like included?"
 ]
 
+allowed_emails = ["testuser1@gmail.com"]
+
 openai_client = OpenAI(api_key=os.getenv("OPENAPI_KEY"))
 
 class Message(BaseModel):
@@ -69,13 +71,18 @@ async def song_writing(
     print("ALL FIELDS RECEIVED:", dict(form))
     print(body.song_title, body.chat_history)
 
-    # if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
-    #     raise HTTPException(status_code=400, detail="auth token is required")
+    if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
+        raise HTTPException(status_code=400, detail="auth token is required")
     
     token = request.headers.get("Authorization").replace("Bearer ", "")
 
-    # if not database.validate_user(token):
-    #     raise HTTPException(status_code=400, detail="valid user auth token is required")
+    user_email = database.get_email(token)
+
+    if not user_email:
+        raise HTTPException(status_code=400, detail="valid user auth token is required")
+
+    if user_email not in allowed_emails:
+        raise HTTPException(status_code=400, detail="only certain users can use this feature")
 
     if body.song_title not in midi_files:
         raise HTTPException(status_code=400, detail="valid song title is required")
@@ -153,13 +160,19 @@ async def song_writing(
     print("ALL FIELDS RECEIVED:", dict(form))
     print(body.song_title)
 
-    # if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
-    #     raise HTTPException(status_code=400, detail="auth token is required")
+    if request.headers.get("Authorization") == None or "Bearer " not in request.headers.get("Authorization"):
+        raise HTTPException(status_code=400, detail="auth token is required")
     
     token = request.headers.get("Authorization").replace("Bearer ", "")
 
-    # if not database.validate_user(token):
-    #     raise HTTPException(status_code=400, detail="valid user auth token is required")
+    user_email = database.get_email(token)
+
+    if not user_email:
+        raise HTTPException(status_code=400, detail="valid user auth token is required")
+
+    if user_email not in allowed_emails:
+        raise HTTPException(status_code=400, detail="only certain users can use this feature")
+
 
     if body.song_title not in midi_files:
         raise HTTPException(status_code=400, detail="valid song title is required")
