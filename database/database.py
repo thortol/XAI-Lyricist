@@ -48,3 +48,12 @@ class Database:
             return False
         except:
             return False
+    
+    def get_email(self, token):
+        try:
+            user = self.supabase.auth.get_user(token)
+            if user.user:
+                return user.user.email
+            return None
+        except:
+            return None
